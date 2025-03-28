@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 import joblib
 import os
 
-from .preprocess import (
+from house_prices.preprocess import (
     split_features_target,
     identify_column_types,
     handle_missing_values,
@@ -17,43 +17,54 @@ from .preprocess import (
     scale_numeric_features
 )
 
+# Get the absolute path to the models directory
+MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
+
 
 def prepare_training_data(
-    df: pd.DataFrame
-) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
-    """Prepare data for training by splitting and preprocessing.
+    df: pd.DataFrame,
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
+    """Prepare data for training by preprocessing.
     
     Args:
         df: Input dataframe containing both features and target
+        X_train: Training features
+        X_test: Test features
         
     Returns:
         Tuple containing:
-        - Processed features dataframe
-        - Target series
+        - Processed training features
+        - Processed test features
         - Dictionary containing fitted preprocessing objects
     """
-    # Split features and target
-    X, y = split_features_target(df)
-    
-    # Split into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    
     # Identify column types
-    numeric_cols, categorical_cols = identify_column_types(X_train)
+    numeric_cols, categorical_cols = identify_column_types(df)
     
     # Handle missing values
-    X_train = handle_missing_values(X_train, numeric_cols, categorical_cols)
-    X_test = handle_missing_values(X_test, numeric_cols, categorical_cols)
+    X_train_processed = handle_missing_values(
+        X_train, numeric_cols, categorical_cols
+    )
+    X_test_processed = handle_missing_values(
+        X_test, numeric_cols, categorical_cols
+    )
     
     # Encode categorical features
-    X_train, encoder = encode_categorical_features(X_train, categorical_cols)
-    X_test, _ = encode_categorical_features(X_test, categorical_cols, encoder)
+    X_train_encoded, encoder = encode_categorical_features(
+        X_train_processed, categorical_cols, is_fit=True
+    )
+    X_test_encoded, _ = encode_categorical_features(
+        X_test_processed, categorical_cols, encoder=encoder
+    )
     
     # Scale numeric features
-    X_train, scaler = scale_numeric_features(X_train, numeric_cols)
-    X_test, _ = scale_numeric_features(X_test, numeric_cols, scaler)
+    X_train_scaled, scaler = scale_numeric_features(
+        X_train_encoded, numeric_cols
+    )
+    X_test_scaled, _ = scale_numeric_features(
+        X_test_encoded, numeric_cols, scaler
+    )
     
     # Save preprocessing objects
     preprocessing_objects = {
@@ -63,7 +74,7 @@ def prepare_training_data(
         'categorical_cols': categorical_cols
     }
     
-    return X_train, y_train, preprocessing_objects
+    return X_train_scaled, X_test_scaled, preprocessing_objects
 
 
 def train_model(
@@ -124,17 +135,27 @@ def save_model_and_preprocessing(
         preprocessing_objects: Dictionary containing preprocessing objects
     """
     # Create models directory if it doesn't exist
-    os.makedirs('models', exist_ok=True)
+    os.makedirs(MODELS_DIR, exist_ok=True)
     
     # Save model
-    joblib.dump(model, 'models/model.joblib')
+    joblib.dump(model, os.path.join(MODELS_DIR, 'model.joblib'))
     
-    # Save preprocessing objects
-    joblib.dump(preprocessing_objects, 'models/preprocessing.joblib')
+    # Save encoder and scaler separately
+    joblib.dump(preprocessing_objects['encoder'], os.path.join(MODELS_DIR, 'encoder.joblib'))
+    joblib.dump(preprocessing_objects['scaler'], os.path.join(MODELS_DIR, 'scaler.joblib'))
+    
+    # Save other preprocessing objects
+    joblib.dump(
+        {
+            'numeric_cols': preprocessing_objects['numeric_cols'],
+            'categorical_cols': preprocessing_objects['categorical_cols']
+        },
+        os.path.join(MODELS_DIR, 'preprocessing.joblib')
+    )
 
 
 def build_model(data: pd.DataFrame) -> Dict[str, float]:
-    """Main function to build and evaluate the model.
+    """Build and train the house prices prediction model.
     
     Args:
         data: Input dataframe containing both features and target
@@ -142,17 +163,26 @@ def build_model(data: pd.DataFrame) -> Dict[str, float]:
     Returns:
         Dictionary containing model performance metrics
     """
-    # Prepare data
-    X_train, y_train, preprocessing_objects = prepare_training_data(data)
+    # Split features and target
+    X, y = split_features_target(data)
+    
+    # Split into train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    
+    # Prepare training data
+    X_train_processed, X_test_processed, preprocessing_objects = prepare_training_data(
+        X, X_train, X_test
+    )
     
     # Train model
-    model = train_model(X_train, y_train)
+    model = train_model(X_train_processed, y_train)
+    
+    # Evaluate model
+    performance = evaluate_model(model, X_test_processed, y_test)
     
     # Save model and preprocessing objects
     save_model_and_preprocessing(model, preprocessing_objects)
     
-    # Evaluate model
-    X_test, y_test, _ = prepare_training_data(data)
-    performance_metrics = evaluate_model(model, X_test, y_test)
-    
-    return performance_metrics
+    return performance

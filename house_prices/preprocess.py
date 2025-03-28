@@ -2,7 +2,7 @@
 
 from typing import Tuple, List
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
 
 def split_features_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
@@ -32,6 +32,10 @@ def identify_column_types(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
         df.select_dtypes(include=['int64', 'float64'])
         .columns.tolist()
     )
+    # Remove SalePrice from numeric columns if it exists
+    if 'SalePrice' in numeric_cols:
+        numeric_cols.remove('SalePrice')
+        
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     return numeric_cols, categorical_cols
 
@@ -67,20 +71,25 @@ def handle_missing_values(
 def encode_categorical_features(
     df: pd.DataFrame,
     categorical_cols: List[str],
-    encoder: OneHotEncoder = None
+    encoder: OneHotEncoder = None,
+    is_fit: bool = False
 ) -> Tuple[pd.DataFrame, OneHotEncoder]:
     """Encode categorical features using OneHotEncoder.
     
     Args:
         df: Input dataframe
         categorical_cols: List of categorical column names
-        encoder: Optional pre-fitted OneHotEncoder
+        encoder: Optional pre-fitted encoder
+        is_fit: Whether to fit the encoder (True for training data)
         
     Returns:
         Tuple containing encoded dataframe and fitted encoder
     """
     if encoder is None:
-        encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        encoder = OneHotEncoder(
+            sparse_output=False,
+            handle_unknown='ignore'
+        )
         encoded_features = encoder.fit_transform(df[categorical_cols])
     else:
         encoded_features = encoder.transform(df[categorical_cols])
@@ -89,10 +98,10 @@ def encode_categorical_features(
     feature_names = []
     for i, col in enumerate(categorical_cols):
         feature_names.extend(
-            [f"{col}_{cat}" for cat in encoder.categories_[i]]
+            [f"{col}_{val}" for val in encoder.categories_[i]]
         )
     
-    # Create dataframe with encoded features
+    # Create DataFrame with encoded features
     encoded_df = pd.DataFrame(
         encoded_features,
         columns=feature_names,
@@ -100,10 +109,10 @@ def encode_categorical_features(
     )
     
     # Drop original categorical columns and concatenate encoded features
-    result_df = pd.concat(
-        [df.drop(categorical_cols, axis=1), encoded_df],
-        axis=1
-    )
+    result_df = pd.concat([
+        df.drop(columns=categorical_cols),
+        encoded_df
+    ], axis=1)
     
     return result_df, encoder
 
