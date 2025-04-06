@@ -1,6 +1,6 @@
 """Preprocessing functions for the house prices prediction model."""
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 
@@ -28,14 +28,7 @@ def identify_column_types(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     Returns:
         Tuple containing lists of numeric and categorical column names
     """
-    numeric_cols = (
-        df.select_dtypes(include=['int64', 'float64'])
-        .columns.tolist()
-    )
-    # Remove SalePrice from numeric columns if it exists
-    if 'SalePrice' in numeric_cols:
-        numeric_cols.remove('SalePrice')
-        
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     return numeric_cols, categorical_cols
 
@@ -45,7 +38,7 @@ def handle_missing_values(
     numeric_cols: List[str],
     categorical_cols: List[str]
 ) -> pd.DataFrame:
-    """Handle missing values in the dataframe.
+    """Handle missing values in the dataset.
     
     Args:
         df: Input dataframe
@@ -53,74 +46,73 @@ def handle_missing_values(
         categorical_cols: List of categorical column names
         
     Returns:
-        Dataframe with handled missing values
+        DataFrame with missing values handled
     """
-    df_copy = df.copy()
+    df_processed = df.copy()
     
-    # Fill numeric missing values with median
+    # Handle numeric missing values with median
     for col in numeric_cols:
-        df_copy[col] = df_copy[col].fillna(df_copy[col].median())
+        df_processed[col] = df_processed[col].fillna(
+            df_processed[col].median()
+        )
     
-    # Fill categorical missing values with mode
+    # Handle categorical missing values with mode
     for col in categorical_cols:
-        df_copy[col] = df_copy[col].fillna(df_copy[col].mode()[0])
+        df_processed[col] = df_processed[col].fillna(
+            df_processed[col].mode()[0]
+        )
     
-    return df_copy
+    return df_processed
 
 
 def encode_categorical_features(
     df: pd.DataFrame,
     categorical_cols: List[str],
-    encoder: OneHotEncoder = None,
-    is_fit: bool = False
+    encoder: Optional[OneHotEncoder] = None
 ) -> Tuple[pd.DataFrame, OneHotEncoder]:
     """Encode categorical features using OneHotEncoder.
     
     Args:
         df: Input dataframe
         categorical_cols: List of categorical column names
-        encoder: Optional pre-fitted encoder
-        is_fit: Whether to fit the encoder (True for training data)
+        encoder: Optional pre-fitted OneHotEncoder
         
     Returns:
-        Tuple containing encoded dataframe and fitted encoder
+        Tuple of (encoded dataframe, fitted encoder)
     """
     if encoder is None:
-        encoder = OneHotEncoder(
-            sparse_output=False,
-            handle_unknown='ignore'
-        )
-        encoded_features = encoder.fit_transform(df[categorical_cols])
+        encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        encoded_data = encoder.fit_transform(df[categorical_cols])
     else:
-        encoded_features = encoder.transform(df[categorical_cols])
+        encoded_data = encoder.transform(df[categorical_cols])
     
-    # Create feature names for encoded columns
+    # Create feature names
     feature_names = []
     for i, col in enumerate(categorical_cols):
         feature_names.extend(
             [f"{col}_{val}" for val in encoder.categories_[i]]
         )
     
-    # Create DataFrame with encoded features
+    # Create encoded dataframe
     encoded_df = pd.DataFrame(
-        encoded_features,
+        encoded_data,
         columns=feature_names,
         index=df.index
     )
     
-    # Drop original categorical columns and concatenate encoded features
-    result_df = pd.concat([
-        df.drop(columns=categorical_cols),
-        encoded_df
-    ], axis=1)
+    # Drop original categorical columns
+    df_encoded = df.drop(columns=categorical_cols)
     
-    return result_df, encoder
+    # Concatenate encoded features
+    df_encoded = pd.concat([df_encoded, encoded_df], axis=1)
+    
+    return df_encoded, encoder
 
 
 def scale_numeric_features(
     df: pd.DataFrame,
     numeric_cols: List[str],
-    scaler: StandardScaler = None
+    scaler: Optional[StandardScaler] = None
 ) -> Tuple[pd.DataFrame, StandardScaler]:
     """Scale numeric features using StandardScaler.
     
@@ -130,12 +122,25 @@ def scale_numeric_features(
         scaler: Optional pre-fitted StandardScaler
         
     Returns:
-        Tuple containing scaled dataframe and fitted scaler
+        Tuple of (scaled dataframe, fitted scaler)
     """
     if scaler is None:
         scaler = StandardScaler()
-        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+        scaled_data = scaler.fit_transform(df[numeric_cols])
     else:
-        df[numeric_cols] = scaler.transform(df[numeric_cols])
+        scaled_data = scaler.transform(df[numeric_cols])
     
-    return df, scaler
+    # Create scaled dataframe
+    scaled_df = pd.DataFrame(
+        scaled_data,
+        columns=numeric_cols,
+        index=df.index
+    )
+    
+    # Drop original numeric columns
+    df_scaled = df.drop(columns=numeric_cols)
+    
+    # Concatenate scaled features
+    df_scaled = pd.concat([df_scaled, scaled_df], axis=1)
+    
+    return df_scaled, scaler

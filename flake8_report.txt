@@ -1,0 +1,13 @@
+house_prices/inference.py:3:1: F401 'typing.Dict' imported but unused
+house_prices/inference.py:3:1: F401 'typing.Any' imported but unused
+house_prices/inference.py:32:80: E501 line too long (81 > 79 characters)
+house_prices/preprocess.py:62:80: E501 line too long (80 > 79 characters)
+house_prices/preprocess.py:66:80: E501 line too long (81 > 79 characters)
+house_prices/preprocess.py:95:80: E501 line too long (80 > 79 characters)
+house_prices/train.py:5:1: F401 'numpy as np' imported but unused
+house_prices/train.py:21:1: E302 expected 2 blank lines, found 1
+house_prices/train.py:29:80: E501 line too long (121 > 79 characters)
+house_prices/train.py:57:80: E501 line too long (86 > 79 characters)
+house_prices/train.py:73:80: E501 line too long (80 > 79 characters)
+house_prices/train.py:77:1: E302 expected 2 blank lines, found 1
+house_prices/train.py:109:1: E302 expected 2 blank lines, found 1
